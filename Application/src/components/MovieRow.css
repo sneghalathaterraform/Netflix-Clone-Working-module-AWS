@@ -1,0 +1,72 @@
+.row {
+  margin: 0 0 32px;
+  padding: 0 60px;
+}
+
+.row__title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #e5e5e5;
+  margin-bottom: 12px;
+}
+
+.row__posters {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: #444 transparent;
+}
+
+.row__posters::-webkit-scrollbar { height: 4px; }
+.row__posters::-webkit-scrollbar-track { background: transparent; }
+.row__posters::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
+
+.row__poster-wrapper {
+  position: relative;
+  flex-shrink: 0;
+  transition: transform 0.3s ease;
+}
+
+.row__poster-wrapper--hovered {
+  transform: scale(1.08);
+  z-index: 10;
+}
+
+.row__poster {
+  width: 200px;
+  height: 113px;
+  object-fit: cover;
+  border-radius: 4px;
+  display: block;
+}
+
+.row__poster--large {
+  width: 140px;
+  height: 210px;
+}
+
+.row__poster-info {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0,0,0,0.85);
+  padding: 6px 8px;
+  border-radius: 0 0 4px 4px;
+}
+
+.row__poster-info p {
+  font-size: 0.75rem;
+  color: #fff;
+  margin: 0 0 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row__poster-info span {
+  font-size: 0.7rem;
+  color: #ffd700;
+}

@@ -1,0 +1,214 @@
+name: Netflix DevSecOps Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/netflix-app
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+
+  # ─── JOB 1: SONARCLOUD ───────────────────────────────────────────────────
+  sonarcloud:
+    name: SonarCloud Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: application/package.json
+
+      - name: Install dependencies
+        working-directory: application
+        run: npm ci
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+            -Dsonar.organization=${{ secrets.SONAR_ORG }}
+            -Dsonar.sources=application/src
+            -Dsonar.exclusions=**/node_modules/**,**/dist/**
+
+  # ─── JOB 2: OWASP SCAN ───────────────────────────────────────────────────
+  owasp-scan:
+    name: OWASP Dependency Check
+    runs-on: ubuntu-latest
+    needs: sonarcloud
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: application/package.json
+
+      - name: Install dependencies
+        working-directory: application
+        run: npm ci
+
+      - name: Run OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'netflix-devsecops'
+          path: 'application'
+          format: 'HTML'
+          out: 'reports'
+          args: >
+            --enableRetired
+            --disableYarnAudit
+
+      - name: Upload OWASP report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: owasp-report
+          path: reports/
+
+  # ─── JOB 3: TRIVY FILESYSTEM SCAN ────────────────────────────────────────
+  trivy-fs-scan:
+    name: Trivy Filesystem Scan
+    runs-on: ubuntu-latest
+    needs: sonarcloud
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: 'application'
+          format: 'table'
+          output: 'trivy-fs-report.txt'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
+
+      - name: Upload Trivy FS report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trivy-fs-report
+          path: trivy-fs-report.txt
+
+  # ─── JOB 4: DOCKER BUILD & PUSH ──────────────────────────────────────────
+  docker-build:
+    name: Docker Build and Push
+    runs-on: ubuntu-latest
+    needs: [ owasp-scan, trivy-fs-scan ]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          build-args: |
+            VITE_TMDB_API_KEY=${{ secrets.TMDB_API_KEY }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─── JOB 5: TRIVY IMAGE SCAN ─────────────────────────────────────────────
+  trivy-image-scan:
+    name: Trivy Image Scan
+    runs-on: ubuntu-latest
+    needs: docker-build
+
+    steps:
+      - name: Run Trivy image scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:latest
+          format: 'table'
+          output: 'trivy-image-report.txt'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
+
+      - name: Upload Trivy image report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trivy-image-report
+          path: trivy-image-report.txt
+
+  # ─── JOB 6: DEPLOY TO EC2 ────────────────────────────────────────────────
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    needs: trivy-image-scan
+
+    steps:
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            docker stop netflix-app || true
+            docker rm netflix-app || true
+            docker pull ${{ env.IMAGE_NAME }}:latest
+            docker run -d \
+              --name netflix-app \
+              --restart unless-stopped \
+              -p 8081:80 \
+              ${{ env.IMAGE_NAME }}:latest
+            docker image prune -f
+            echo "=== Deployment complete ==="
+            docker ps
+
+  # ─── JOB 7: NOTIFY ───────────────────────────────────────────────────────
+  notify:
+    name: Notify Result
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: always()
+
+    steps:
+      - name: Success
+        if: ${{ needs.deploy.result == 'success' }}
+        run: |
+          echo "Pipeline completed successfully!"
+          echo "App URL: http://${{ secrets.EC2_HOST }}:8081"
+
+      - name: Failed
+        if: ${{ needs.deploy.result == 'failure' }}
+        run: |
+          echo "Pipeline FAILED. Check logs above."
+          exit 1
