@@ -14,7 +14,7 @@ export default function Navbar() {
   return (
     <nav className={`navbar ${scrolled ? 'navbar--scrolled' : ''}`}>
       <div className="navbar__left">
-        <span className="navbar__logo-text">NETFLIX</span>
+        <span className="navbar__logo-text">NETFLIX-CLONE</span>
       </div>
       <div className="navbar__right">
         <span className="navbar__avatar">S</span>
