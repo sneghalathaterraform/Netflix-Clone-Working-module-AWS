@@ -7,11 +7,11 @@ WORKDIR /app
 COPY Application/package*.json ./
 RUN npm ci
 
-# Fix permissions on node_modules binaries
-RUN chmod -R +x node_modules/.bin
-
 # Copy source
 COPY Application/ .
+
+# Fix permissions on node_modules binaries (must run after COPY to override any Windows-built local modules)
+RUN chmod -R +x node_modules/.bin
 
 # TMDB API key injected at build time
 ARG VITE_TMDB_API_KEY
