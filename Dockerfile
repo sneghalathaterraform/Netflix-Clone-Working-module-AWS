@@ -3,9 +3,12 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Install dependencies first (better layer caching)
+# Install dependencies
 COPY Application/package*.json ./
 RUN npm ci
+
+# Fix permissions on node_modules binaries
+RUN chmod -R +x node_modules/.bin
 
 # Copy source
 COPY Application/ .
@@ -14,17 +17,14 @@ COPY Application/ .
 ARG VITE_TMDB_API_KEY
 ENV VITE_TMDB_API_KEY=$VITE_TMDB_API_KEY
 
-# Use npx to run tsc and vite directly — avoids permission issues
-RUN npx tsc && npx vite build
+# Build
+RUN npm run build
 
 # ─── Stage 2: Serve ──────────────────────────────────────────────────────────
 FROM nginx:alpine
 
-# Remove default nginx config
 RUN rm /etc/nginx/conf.d/default.conf
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Copy built app from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 EXPOSE 80
