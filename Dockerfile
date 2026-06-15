@@ -4,11 +4,11 @@ FROM node:18-alpine AS builder
 WORKDIR /app
 
 # Install dependencies first (better layer caching)
-COPY app/package*.json ./
+COPY Application/package*.json ./
 RUN npm ci
 
 # Copy source and build
-COPY app/ .
+COPY Application/ .
 
 # TMDB API key injected at build time
 ARG VITE_TMDB_API_KEY
