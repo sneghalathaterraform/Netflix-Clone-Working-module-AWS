@@ -29,7 +29,7 @@ jobs:
           node-version: '18'
 
       - name: Install dependencies
-        working-directory: application
+        working-directory: Application
         run: npm ci
 
       - name: SonarCloud Scan
@@ -41,7 +41,7 @@ jobs:
           args: >
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
             -Dsonar.organization=${{ secrets.SONAR_ORG }}
-            -Dsonar.sources=application/src
+            -Dsonar.sources=Application/src
             -Dsonar.exclusions=**/node_modules/**,**/dist/**
 
   # ─── JOB 2: OWASP SCAN ───────────────────────────────────────────────────
@@ -60,14 +60,14 @@ jobs:
           node-version: '18'
 
       - name: Install dependencies
-        working-directory: application
+        working-directory: Application
         run: npm ci
 
       - name: Run OWASP Dependency Check
         uses: dependency-check/Dependency-Check_Action@main
         with:
           project: 'netflix-devsecops'
-          path: 'application'
+          path: 'Application'
           format: 'HTML'
           out: 'reports'
           args: >
@@ -95,7 +95,7 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
-          scan-ref: 'application'
+          scan-ref: 'Application'
           format: 'table'
           output: 'trivy-fs-report.txt'
           severity: 'CRITICAL,HIGH'
