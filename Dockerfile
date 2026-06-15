@@ -7,19 +7,20 @@ WORKDIR /app
 COPY Application/package*.json ./
 RUN npm ci
 
-# Copy source and build
+# Copy source
 COPY Application/ .
 
 # TMDB API key injected at build time
 ARG VITE_TMDB_API_KEY
 ENV VITE_TMDB_API_KEY=$VITE_TMDB_API_KEY
 
-RUN npm run build
+# Use npx to run tsc and vite directly — avoids permission issues
+RUN npx tsc && npx vite build
 
 # ─── Stage 2: Serve ──────────────────────────────────────────────────────────
 FROM nginx:alpine
 
-# Remove default nginx config and replace with ours
+# Remove default nginx config
 RUN rm /etc/nginx/conf.d/default.conf
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
