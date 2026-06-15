@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+// @ts-ignore: allow importing CSS in projects without global CSS module declarations
 import './Navbar.css'
 
 export default function Navbar() {
