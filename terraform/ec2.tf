@@ -15,26 +15,9 @@ data "aws_ami" "ubuntu" {
 }
 
 # ─── KEY PAIR ────────────────────────────────────────────────────────────────
-# Generates a fresh key pair and saves the private key locally
-resource "tls_private_key" "main" {
-  algorithm = "RSA"
-  rsa_bits  = 4096
-}
-
-resource "aws_key_pair" "main" {
-  key_name   = var.key_pair_name
-  public_key = tls_private_key.main.public_key_openssh
-
-  tags = {
-    Name    = var.key_pair_name
-    Project = var.project_name
-  }
-}
-
-resource "local_file" "private_key" {
-  content         = tls_private_key.main.private_key_pem
-  filename        = "${path.module}/${var.key_pair_name}.pem"
-  file_permission = "0400"
+# Key pair already exists in AWS — reuse it instead of generating a new one
+data "aws_key_pair" "main" {
+  key_name = var.key_pair_name
 }
 
 # ─── IAM ROLE FOR EC2 ────────────────────────────────────────────────────────
@@ -76,7 +59,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 resource "aws_instance" "main" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
-  key_name               = aws_key_pair.main.key_name
+  key_name               = data.aws_key_pair.main.key_name
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.main.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
